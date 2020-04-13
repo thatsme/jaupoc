@@ -52,9 +52,7 @@ count = 0
 
 script = argv
 pre = script[0]
-#print(pre)
 if(pre[0:2]==".\\"):
-    #print(pre[0:2])
     stripped = pre[2:]
 else:
     stripped = pre
