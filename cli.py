@@ -5,8 +5,10 @@ import redis
 import json
 import pprint
 import sys
+import time
 pp = pprint.PrettyPrinter(indent=2)
-
+MASTER_CHANNEL = "master"
+CMD_CHANNEL = "commandline"
 message_struct = {}
 logname = "client.log"
 logging.basicConfig(filename=logname,
@@ -56,12 +58,16 @@ def runaction(cmdlist):
         return False
     
     message_struct["action"] = maction
-    message_struct["sender"] = "commandline"        
+    message_struct["sender"] = CMD_CHANNEL        
     try:
         r.publish(mprocess, dict_to_string(message_struct))
     except:
         print("opppss publish error")
-    while True:
+    
+    ## Just get the first response, we have to modify, like info zone, or just 
+    ## avoid this, maybe we try with some like 5 seconds blocking loop 
+    t_end = time.time() + 5 
+    while time.time() < t_end:
         try:
             message = p.get_message()
         except:
@@ -69,9 +75,9 @@ def runaction(cmdlist):
             
         if message:
             mydata = string_to_dict(message["data"])
-            return mydata
-            break
-
+            if(mydata["action"]=="response"):
+                pp.pprint(mydata)
+    return True
 
 def getqueue():
     pass
@@ -102,13 +108,15 @@ while 1:
     mprocess = command[0]
     if(mprocess=="master"):
         #maction = command[1]
-        print("==============================================")
+        print("== Use <info> to check response from long run process ============================================")
         afteraction = runaction(command)
         if(afteraction != False):
             pp.pprint(afteraction)
             
     elif(mprocess=="info"):
-        while True:
+        ## Waiting info from master for 1 minute
+        t_end = time.time() + 10 
+        while time.time() < t_end:
             try:
                 message = p.get_message()
             except:
@@ -119,7 +127,7 @@ while 1:
                 pp.pprint(mydata)
                 ## Clear user_input
                 user_input = ""
-                break
+                
     elif(mprocess=="exit"):
         sys.exit(0)
     else:          

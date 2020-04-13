@@ -15,8 +15,10 @@ from random import randint
 from secrets import randbelow
 import pprint
 import argparse
+import signal
 
 pp = pprint.PrettyPrinter(indent=4)
+
 
 def dict_to_binary(the_dict):
     mstring = json.dumps(the_dict)
@@ -36,8 +38,30 @@ def string_to_dict(the_string):
     d = json.loads(the_string)  
     return d
 
+def shutdown_process(plist):
+    elist = []
+    if(type(plist) is list):
+        elist = plist
+    else:
+        elist.append(plist)
+    
+    message_struct = {}
+    message_struct["action"] = "shutdown"
+    message_struct["sender"] = MASTER_CHANNEL
+
+    for sp in elist:
+        ##
+        print(f"Process to shudtown {sp}")
+        try:
+            r.publish(sp, dict_to_string(message_struct))
+        except:
+            logger.debug(f"Error publish to child {sp}")         
+            return False
+        
+    return True
+
+
 time_start = str(datetime.datetime.now())
-master_script = "master"
 immaster = False
 virtualenv = False
 active_process = []
@@ -49,6 +73,8 @@ process_struct["timestamp"] = ""
 activation_counter = 0
 message_struct = {}
 count = 0
+MASTER_CHANNEL = "master"
+CMD_CHANNEL = "commandline"
 
 script = argv
 pre = script[0]
@@ -113,6 +139,13 @@ elif platform == "win32":
 if hasattr(sys, 'real_prefix'):
     virtualenv = True
         
+def signal_handler(sig, frame):
+    print('You pressed Ctrl+C!')
+    shutdown_process(active_process)
+    sys.exit(0)
+
+signal.signal(signal.SIGINT, signal_handler)
+
         
 logger.debug('%s %s %s %s %s', name, "is master :", immaster, " Virtual : ", virtualenv)
 logger.debug(currentDirectory)
@@ -120,9 +153,9 @@ logger.debug(currentDirectory)
 #time.sleep(1000)
 if(immaster):
     try:
-        p.subscribe('master')
-        p.subscribe('commandline')
-        logger.debug("subscribed master/cli interface")
+        p.subscribe(MASTER_CHANNEL)
+        # p.subscribe('commandline')
+        logger.debug("Subscribed master")
     except:
         logger.debug("Error subscribing")
 
@@ -161,7 +194,7 @@ if(immaster):
                     #if(int(mydata["counter"])>=int(running_process[mydata["sender"]]["cycle"])):
                     if(int(mydata["counter"])>=int(mydata["cycle"]) and int(mydata["cycle"])>0):
                         message_struct["action"] = "shutdown"
-                        message_struct["sender"] = master_script
+                        message_struct["sender"] = MASTER_CHANNEL
                         ##
                         try:
                             r.publish(mydata["sender"], dict_to_string(message_struct))
@@ -169,7 +202,7 @@ if(immaster):
                             logger.debug("Error publish to child "+mydata["sender"])         
                     else:
                         message_struct["action"] = "acknowledge"
-                        message_struct["sender"] = master_script
+                        message_struct["sender"] = MASTER_CHANNEL
                         try:
                             r.publish(mydata["sender"], dict_to_string(message_struct))
                         except:
@@ -213,15 +246,16 @@ if(immaster):
                         except Exception as e:
                             print(e)
                             logger.debug(e)      
-                                                              
+                                             
+                        ## Acknowledge to command cli                 
                         message_struct["action"] = "response"
-                        message_struct["sender"] = master_script        
-                        message_struct["data"] = "spawn done"
+                        message_struct["sender"] = MASTER_CHANNEL     
+                        message_struct["data"] = f" {id_to_run} spawn done"
                         try:
                             r.publish(mydata["sender"], dict_to_string(message_struct))
-                            logger.debug("published to "+mydata["sender"])
+                            logger.debug(f"published to {mydata['sender']}")
                         except Exception as e:
-                            logger.debug("Error publish to child "+mydata["sender"])                
+                            logger.debug(f"Error publish to {mydata['sender']}")                
 
                         #time.sleep(10)
                     message = None                       
@@ -240,22 +274,19 @@ if(immaster):
                     ##
                     try:
                         message_struct["action"] = "acknowledge"
-                        message_struct["sender"] = master_script        
-                        #message_struct["counter"] = mydata["cycle"]
+                        message_struct["sender"] = MASTER_CHANNEL        
                         r.publish(mydata["sender"], dict_to_string(message_struct))
-                        #formatted_str = 'The first name is %s and second name is %s' % (f_name, l_name)
-                        print ("published to %s %s " % (mydata["sender"], mydata["cycle"]))
-
-                        logger.debug("published to %s %s ", mydata["sender"], mydata["cycle"])
+                        #print (f'published to {mydata["sender"]} run {mydata["cycle"] }')
+                        logger.debug(f'published to {mydata["sender"]} run {mydata["cycle"] }')
                     except Exception as e:
-                        logger.debug("Error publish to child "+id_to_run)                
+                        logger.debug(f"Error publish to child {id_to_run}")                
                                 
-                    print("Esce dal ciclo "+str(activation_counter))
+                    print(f"Exit from {activation_counter} cycle ")
                     running_process.update(temp)
                     completed = True             
                 elif(mydata["action"]=="listactive"):
                     message_struct["action"] = "response"
-                    message_struct["sender"] = master_script        
+                    message_struct["sender"] = MASTER_CHANNEL       
                     message_struct["data"] = running_process
                     try:
                         r.publish(mydata["sender"], dict_to_string(message_struct))
@@ -263,50 +294,45 @@ if(immaster):
                     except Exception as e:
                         logger.debug("Error publish to child "+mydata["sender"])                
 
+                ## Call from command cli
                 elif(mydata["action"]=="shutdown"):
                     print(f"Process to shutdown { mydata['processtoshutdown']}")
-                    message_struct["action"] = "shutdown"
-                    message_struct["sender"] = master_script
                     if(mydata["processtoshutdown"]=="all"):
-                        for sp in active_process:
-                            ##
-                            print(f"Process to shudtown {sp}")
-                            try:
-                                r.publish(sp, dict_to_string(message_struct))
-                            except:
-                                logger.debug("Error publish to child "+mydata["sender"])         
+                        shutdown_process(active_process)
                     else:
-                        ##
-                        try:
-                            r.publish(mydata["processtoshutdown"], dict_to_string(message_struct))
-                        except:
-                            logger.debug("Error publish to child "+mydata["sender"])         
+                        shutdown_process(mydata["processtoshutdown"])
 
+                    ## Acknowledge to command cli
                     message_struct["action"] = "response"
-                    message_struct["sender"] = master_script        
-                    message_struct["data"] = "shutdown done"
+                    message_struct["sender"] = MASTER_CHANNEL       
+                    message_struct["data"] = "shutdown start"
                     try:
-                        r.publish(mydata["sender"], dict_to_string(message_struct))
-                        logger.debug("published to "+mydata["sender"])
+                        r.publish(mydata['sender'], dict_to_string(message_struct))
+                        logger.debug(f"published to {mydata['sender']}")
                     except Exception as e:
-                        logger.debug("Error publish to child "+mydata["sender"])                
-
+                        logger.debug("Error publish to command cli")                
+                
+                ## call from spawn process
                 elif(mydata["action"]=="executeshutdown"):
+                    ## Remove process from list of running process
                     del running_process[mydata["sender"]]
                     print(f'{mydata["sender"]} down, last ping {mydata["lastping"]}')
+                    
+                    ## Acknowledge to command cli
                     message_struct["action"] = "info"
-                    message_struct["sender"] = master_script        
-                    message_struct["data"] = running_process
+                    message_struct["sender"] = MASTER_CHANNEL       
+                    message_struct["data"] = f'{mydata["sender"]} shutdown done'
                     try:
-                        r.publish("client", dict_to_string(message_struct))
-                        logger.debug("published to client")
+                        r.publish(CMD_CHANNEL, dict_to_string(message_struct))
+                        logger.debug("published to command line")
                     except Exception as e:
-                        logger.debug("Error publish to child client")                
+                        logger.debug("Error publish to command line")                
                     
                 elif(mydata["action"]=="response_to_acknowledge"):
                     print(f'good to know, {mydata["sender"]} data: {mydata["data"]}')
             else:
                 print(f'Channel {message["channel"]}')
+                
                 pp.pprint(mydata)
                 
         else:
@@ -321,7 +347,7 @@ else:
     #random_number = str(randbelow(60))
     get_ack = False
     print(f"Process id : {id}")
-    logger.debug(f"Process id  {+id}")
+    logger.debug(f"Process id  {id}")
     try:
         p.subscribe(id)
         logger.debug(f"Spawn process subscription {id}")
@@ -339,7 +365,7 @@ else:
 
     ##
     try:
-        r.publish(master_script, dict_to_string(message_struct))
+        r.publish(MASTER_CHANNEL, dict_to_string(message_struct))
         logger.debug("Published to master")
     except Exception as e:
         logger.debug("Error publish to master ")
@@ -374,7 +400,7 @@ else:
                 
                 message_struct["data"] = " is exiting"
                 try:
-                    r.publish(master_script, dict_to_string(message_struct))
+                    r.publish(MASTER_CHANNEL, dict_to_string(message_struct))
                     logger.debug("Published to master")
                     sys.exit(0)
                 except Exception as e:
@@ -401,7 +427,7 @@ else:
             message_struct["cycle"] = args.npolls
 
             try:
-                r.publish("master", dict_to_string(message_struct))
+                r.publish(MASTER_CHANNEL, dict_to_string(message_struct))
                 logger.debug(f"{id} Ping to master {count} {args.npolls}")
                 get_ack = False
             except Exception as e:
