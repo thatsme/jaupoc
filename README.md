@@ -1,2 +1,2 @@
 # jaupoc
- Just Another Useles Piece of Code
+ Just Another Useless Piece of Code
