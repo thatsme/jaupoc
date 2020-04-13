@@ -168,14 +168,14 @@ if(immaster):
                         try:
                             r.publish(mydata["sender"], dict_to_string(message_struct))
                         except:
-                            logger.debug("Error pubblish to child "+mydata["sender"])         
+                            logger.debug("Error publish to child "+mydata["sender"])         
                     else:
                         message_struct["action"] = "acknowledge"
                         message_struct["sender"] = master_script
                         try:
                             r.publish(mydata["sender"], dict_to_string(message_struct))
                         except:
-                            logger.debug("Error pubblish to child "+mydata["sender"])         
+                            logger.debug("Error publish to child "+mydata["sender"])         
                         
                         print("Pinged %s %s %s " % (mydata["counter"], mydata["cycle"], mydata["sender"]))     
                 elif(mydata["action"]=="spawn"):
@@ -223,7 +223,7 @@ if(immaster):
                             r.publish(mydata["sender"], dict_to_string(message_struct))
                             logger.debug("published to "+mydata["sender"])
                         except Exception as e:
-                            logger.debug("Error pubblish to child "+mydata["sender"])                
+                            logger.debug("Error publish to child "+mydata["sender"])                
 
                         #time.sleep(10)
                     message = None                       
@@ -250,7 +250,7 @@ if(immaster):
 
                         logger.debug("published to %s %s ", mydata["sender"], mydata["cycle"])
                     except Exception as e:
-                        logger.debug("Error pubblish to child "+id_to_run)                
+                        logger.debug("Error publish to child "+id_to_run)                
                                 
                     print("Esce dal ciclo "+str(activation_counter))
                     running_process.update(temp)
@@ -263,7 +263,7 @@ if(immaster):
                         r.publish(mydata["sender"], dict_to_string(message_struct))
                         logger.debug("published to "+mydata["sender"])
                     except Exception as e:
-                        logger.debug("Error pubblish to child "+mydata["sender"])                
+                        logger.debug("Error publish to child "+mydata["sender"])                
 
                 elif(mydata["action"]=="shutdown"):
                     print(f"Process to shutdown { mydata['processtoshutdown']}")
@@ -276,13 +276,13 @@ if(immaster):
                             try:
                                 r.publish(sp, dict_to_string(message_struct))
                             except:
-                                logger.debug("Error pubblish to child "+mydata["sender"])         
+                                logger.debug("Error publish to child "+mydata["sender"])         
                     else:
                         ##
                         try:
                             r.publish(mydata["processtoshutdown"], dict_to_string(message_struct))
                         except:
-                            logger.debug("Error pubblish to child "+mydata["sender"])         
+                            logger.debug("Error publish to child "+mydata["sender"])         
 
                     message_struct["action"] = "response"
                     message_struct["sender"] = master_script        
@@ -291,7 +291,7 @@ if(immaster):
                         r.publish(mydata["sender"], dict_to_string(message_struct))
                         logger.debug("published to "+mydata["sender"])
                     except Exception as e:
-                        logger.debug("Error pubblish to child "+mydata["sender"])                
+                        logger.debug("Error publish to child "+mydata["sender"])                
 
                 elif(mydata["action"]=="executeshutdown"):
                     del running_process[mydata["sender"]]
@@ -303,7 +303,7 @@ if(immaster):
                         r.publish("client", dict_to_string(message_struct))
                         logger.debug("published to client")
                     except Exception as e:
-                        logger.debug("Error pubblish to child client")                
+                        logger.debug("Error publish to child client")                
                     
                 elif(mydata["action"]=="response_to_acknowledge"):
                     print(f'good to know, {mydata["sender"]} data: {mydata["data"]}')
