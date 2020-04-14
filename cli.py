@@ -1,5 +1,6 @@
 from prompt_toolkit import prompt
 from prompt_toolkit.history import FileHistory
+from prompt_toolkit.completion import WordCompleter
 import logging
 import redis
 import json
@@ -23,7 +24,7 @@ def runaction(cmdlist):
     if ncommands < 2:
         return False
     
-    maction = cmdlist[1]
+    maction = cmdlist[1].strip()
     if(maction=="spawn"):
         if(ncommands >=3):
             nprocess = cmdlist[2]
@@ -75,8 +76,11 @@ def runaction(cmdlist):
             
         if message:
             mydata = string_to_dict(message["data"])
+            return mydata
             if(mydata["action"]=="response"):
                 pp.pprint(mydata)
+            elif(mydata["action"]=="activeprocesslist"):
+                return mydata                
     return True
 
 def getqueue():
@@ -97,9 +101,13 @@ try:
 except:
     print("opssss Redis problem")
     
+active_process = []    
+PROCESSCompleter = WordCompleter(active_process,
+                    ignore_case=True)
 while 1:
     user_input = prompt('>',
                         history=FileHistory('history.txt'),
+                        completer=PROCESSCompleter,
                        )
     if(user_input==""):
         continue
@@ -110,7 +118,15 @@ while 1:
         #maction = command[1]
         print("== Use <info> to check response from long run process ============================================")
         afteraction = runaction(command)
-        if(afteraction != False):
+        #print(afteraction)
+        if(afteraction==True):
+            pp.pprint(afteraction)            
+        elif(afteraction["action"]=="activeprocesslist"):
+            active_process = list(afteraction["data"].keys())
+            PROCESSCompleter = WordCompleter(active_process,
+                             ignore_case=True)
+            print(active_process)
+        else:
             pp.pprint(afteraction)
             
     elif(mprocess=="info"):
@@ -130,6 +146,15 @@ while 1:
                 
     elif(mprocess=="exit"):
         sys.exit(0)
+    elif(mprocess=="?"):
+        print("master spawn <numprocess> <numping> <delayping>  ## numping=0 for no exit")
+        print("master listactive  ## list of active spawned process by id")
+        print("master shutdown <processid>  ## all|<processid>")
+        print("master setname <processid> <processname>  ## to be implemented")
+        print("exit ## exit from command line")
+        print("? ## this help")
+        print("\nFor getting process name autocomplete feature, u need to call listactive")
+        
     else:          
         print(user_input)
         # Clear user_input

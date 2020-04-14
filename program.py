@@ -179,19 +179,18 @@ if(immaster):
         if message:
             logger.debug("\n\n")
             logger.debug("====================== server receive start ===============")
-            logger.debug('%s %s',"channel ", message["channel"])
-            logger.debug('%s %s',"type ", message["type"])            
-            logger.debug('%s %s',"data ", message["data"])
+            logger.debug(f'Channel {message["channel"]}')
+            logger.debug(f'Type {message["type"]}')            
+            logger.debug(f'Data {message["data"]}')
             mydata = string_to_dict(message["data"])
-            logger.debug('Decoded data %s %s', mydata, type(mydata))
+            logger.debug(f'Decoded data {mydata} Type {type(mydata)}')
             ##pp.pprint(mydata)
             logger.debug("====================== server receive end ==================\n\n")
 
             if(message["channel"]==b'master'):
                 if(mydata["action"]=="ping" and mydata["sender"] in running_process.keys() ):
                     
-                    #if(int(mydata["counter"])>=10):
-                    #if(int(mydata["counter"])>=int(running_process[mydata["sender"]]["cycle"])):
+                    ## Reach the cycle limit, send shutdown to child process
                     if(int(mydata["counter"])>=int(mydata["cycle"]) and int(mydata["cycle"])>0):
                         message_struct["action"] = "shutdown"
                         message_struct["sender"] = MASTER_CHANNEL
@@ -214,7 +213,6 @@ if(immaster):
                     #sys.exit()
                     mrange = int(mydata["numofprocess"])
                     for i in range(mrange):
-                        print("==============================================================================================")
                         id_to_run = str(uuid.uuid4())
                         tofile = currentDirectory+"\\"+name+"_"+id_to_run+"."+extension
                         torun = name+"_"+id_to_run+"."+extension
@@ -269,7 +267,7 @@ if(immaster):
                     process_struct["cycle"] = mydata["cycle"]
                     process_struct["timestamp"] = mydata["timestamp"]
                     temp[mydata["sender"]] = process_struct
-                    print("new one "+mydata["sender"])
+                    print(f"new one {mydata['sender']}")
                         
                     ##
                     try:
@@ -283,18 +281,19 @@ if(immaster):
                                 
                     print(f"Exit from {activation_counter} cycle ")
                     running_process.update(temp)
-                    completed = True             
+                    completed = True    
+                ## Get list of active process <running_process> list         
                 elif(mydata["action"]=="listactive"):
-                    message_struct["action"] = "response"
+                    message_struct["action"] = "activeprocesslist"
                     message_struct["sender"] = MASTER_CHANNEL       
                     message_struct["data"] = running_process
                     try:
                         r.publish(mydata["sender"], dict_to_string(message_struct))
-                        logger.debug("published to "+mydata["sender"])
+                        logger.debug(f"published to {mydata['sender']}")
                     except Exception as e:
-                        logger.debug("Error publish to child "+mydata["sender"])                
+                        logger.debug(f"Error publish to child {mydata['sender']}")                
 
-                ## Call from command cli
+                ## Shutdown call from command cli
                 elif(mydata["action"]=="shutdown"):
                     print(f"Process to shutdown { mydata['processtoshutdown']}")
                     if(mydata["processtoshutdown"]=="all"):
@@ -312,10 +311,12 @@ if(immaster):
                     except Exception as e:
                         logger.debug("Error publish to command cli")                
                 
-                ## call from spawn process
+                ## Shutdown initiator call from spawn process
                 elif(mydata["action"]=="executeshutdown"):
+                    
                     ## Remove process from list of running process
-                    del running_process[mydata["sender"]]
+                    running_process.pop(mydata["sender"], None)
+                    
                     print(f'{mydata["sender"]} down, last ping {mydata["lastping"]}')
                     
                     ## Acknowledge to command cli
