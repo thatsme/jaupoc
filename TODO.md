@@ -1,0 +1,3 @@
+- Extend command cli commands
+- Finding something better than uuid4 in term of readability 
+- Fix imports
