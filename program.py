@@ -199,16 +199,16 @@ if(immaster):
                         try:
                             r.publish(mydata["sender"], dict_to_string(message_struct))
                         except:
-                            logger.debug("Error publish to child "+mydata["sender"])         
+                            logger.debug(f"Error publish to child {mydata['sender']}")         
                     else:
                         message_struct["action"] = "acknowledge"
                         message_struct["sender"] = MASTER_CHANNEL
                         try:
                             r.publish(mydata["sender"], dict_to_string(message_struct))
                         except:
-                            logger.debug("Error publish to child "+mydata["sender"])         
+                            logger.debug(f"Error publish to child {mydata['sender']}")         
                         
-                        print("Pinged %s %s %s " % (mydata["counter"], mydata["cycle"], mydata["sender"]))     
+                        print(f"Pinged {mydata['counter']} {mydata['cycle']} {mydata['sender']}")     
                 elif(mydata["action"]=="spawn"):
                     #print(mydata["numofprocess"])
                     #sys.exit()

@@ -114,7 +114,7 @@ while 1:
             pp.pprint(afteraction)
             
     elif(mprocess=="info"):
-        ## Waiting info from master for 1 minute
+        ## Waiting info from master for 10 seconds
         t_end = time.time() + 10 
         while time.time() < t_end:
             try:
