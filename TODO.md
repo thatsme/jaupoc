@@ -1,3 +1,5 @@
 - Extend command cli commands
-- Finding something better than uuid4 in term of readability 
+- Finding something better than uuid4 in term of readability , maybe flax id
 - Fix imports
+- Setup some dynamic source/module import system for spawn process
+- Refactoring

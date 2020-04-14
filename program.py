@@ -5,8 +5,6 @@ import uuid
 import sys
 import os
 import ast
-import json
-from sys import platform
 import time 
 import logging
 import redis
@@ -18,25 +16,6 @@ import argparse
 import signal
 
 pp = pprint.PrettyPrinter(indent=4)
-
-
-def dict_to_binary(the_dict):
-    mstring = json.dumps(the_dict)
-    mbinary = ' '.join(format(ord(letter), 'b') for letter in mstring)
-    return mbinary
-
-def binary_to_dict(the_binary):
-    jsn = ''.join(chr(int(x, 2)) for x in the_binary.split())
-    d = json.loads(jsn)  
-    return d
-
-def dict_to_string(the_dict):
-    mstring = json.dumps(the_dict)
-    return mstring
-
-def string_to_dict(the_string):
-    d = json.loads(the_string)  
-    return d
 
 def shutdown_process(plist):
     elist = []
@@ -53,7 +32,7 @@ def shutdown_process(plist):
         ##
         print(f"Process to shudtown {sp}")
         try:
-            r.publish(sp, dict_to_string(message_struct))
+            r.publish(sp, ut.dict_to_string(message_struct))
         except:
             logger.debug(f"Error publish to child {sp}")         
             return False
@@ -75,6 +54,7 @@ message_struct = {}
 count = 0
 MASTER_CHANNEL = "master"
 CMD_CHANNEL = "commandline"
+PYTHON = "python"
 
 script = argv
 pre = script[0]
@@ -101,18 +81,33 @@ if "_" in name:
 else:   
     immaster = True
     
+## OK .. i'm the master, doing some shit     
 if(immaster):
+    from mod import util as ut
+    from mod.processmanager import Pmanager
+    from mod.platformmanager import Platform
     logname = name+".log"
+
+## Bulshit relative import, no separate directory for spawn process .. for now
+## until I get this madness
 else:
+    from mod import util as ut
+    from mod.processmanager import Pmanager
+    from mod.platformmanager import Platform
     logname = name+"_"+id+".log"
 
-logging.basicConfig(filename=logname,
+#logging.info("Running Urban Planning")
+
+
+pm = Pmanager()
+pt = Platform()
+print(pt.getplatform())
+
+logging.basicConfig(filename=pt.logpath+logname,
                             filemode='a',
                             format='%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s',
                             datefmt='%H:%M:%S',
                             level=logging.DEBUG)
-
-#logging.info("Running Urban Planning")
 
 logger = logging.getLogger('programLog')
 
@@ -122,23 +117,7 @@ try:
 
 except:
     logger.debug("Error with Redis server")
-    
-if platform == "linux" or platform == "linux2":
-    # linux
-    copycommand = "cp"
-    mdircommand = "md"
-elif platform == "darwin":
-    # OS X
-    copycommand = "cp"
-    mdircommand = "md"
-elif platform == "win32":
-    # Windows
-    copycommand = "copy"
-    mdircommand = "mkdir"
-    
-if hasattr(sys, 'real_prefix'):
-    virtualenv = True
-        
+            
 def signal_handler(sig, frame):
     print('You pressed Ctrl+C!')
     shutdown_process(active_process)
@@ -159,11 +138,6 @@ if(immaster):
     except:
         logger.debug("Error subscribing")
 
-    #print("****************************************************************")
-    #for key in running_process:
-    #    print(key)
-    #    print(running_process[key])
-    #print("****************************************************************")
     pull_data = []
     
     completed = True            
@@ -182,7 +156,7 @@ if(immaster):
             logger.debug(f'Channel {message["channel"]}')
             logger.debug(f'Type {message["type"]}')            
             logger.debug(f'Data {message["data"]}')
-            mydata = string_to_dict(message["data"])
+            mydata = ut.string_to_dict(message["data"])
             logger.debug(f'Decoded data {mydata} Type {type(mydata)}')
             ##pp.pprint(mydata)
             logger.debug("====================== server receive end ==================\n\n")
@@ -196,14 +170,14 @@ if(immaster):
                         message_struct["sender"] = MASTER_CHANNEL
                         ##
                         try:
-                            r.publish(mydata["sender"], dict_to_string(message_struct))
+                            r.publish(mydata["sender"], ut.dict_to_string(message_struct))
                         except:
                             logger.debug(f"Error publish to child {mydata['sender']}")         
                     else:
                         message_struct["action"] = "acknowledge"
                         message_struct["sender"] = MASTER_CHANNEL
                         try:
-                            r.publish(mydata["sender"], dict_to_string(message_struct))
+                            r.publish(mydata["sender"], ut.dict_to_string(message_struct))
                         except:
                             logger.debug(f"Error publish to child {mydata['sender']}")         
                         
@@ -214,32 +188,36 @@ if(immaster):
                     mrange = int(mydata["numofprocess"])
                     for i in range(mrange):
                         id_to_run = str(uuid.uuid4())
-                        tofile = currentDirectory+"\\"+name+"_"+id_to_run+"."+extension
+                        tofile = currentDirectory+pt.spawndir+pt.slash+name+"_"+id_to_run+"."+extension
                         torun = name+"_"+id_to_run+"."+extension
-                        fromfile = currentDirectory+"\\"+name+"."+extension
+                        fromfile = currentDirectory+pt.slash+name+"."+extension
+                        deletespawnlog = "program_*.log"
+                        deletespawnsource = "program_*.py"
+                        
+                        print(torun)
+                        print(deletespawnlog)
+                        print(deletespawnsource)
+                        
                         logger.debug("=== Span section =======")
                         logger.debug(fromfile)
                         logger.debug(tofile)
                             
-                        subprocess.run(["rm", "program_*.log"], shell=True)
-                        #subprocess.run(["rm", "program_*.py"], shell=True)
+                        subprocess.run(["rm",deletespawnlog], cwd = pt.spawndir, shell=True)
+                        #subprocess.run(["rm", deletespawnsource], shell=True)
                         
-                        subprocess.run([copycommand, fromfile, tofile], shell=True)
+                        subprocess.run([pt.copycommand, fromfile, tofile], shell=True)
                         
+                        # Spawn Popen args
                         margs = []
-                        margs.append("python")
+                        margs.append(PYTHON)
                         margs.append(torun)
                         margs.append(str(mydata["numofpolls"]))
                         margs.append(str(mydata["polldelay"]))
                         
                         # Python >= 3.3 has subprocess.DEVNULL
                         try:
-                            ## process parameters
-                            ## mydata["numofpolls"]   <- number of polls befor programmatically exit
-                            ## mydata["pollsdelay"]   <- poll delay seconds
-                            #Popen(["python", torun, int(mydata["numofpolls"]), int(mydata["polldelay"]) ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                            process = Popen(margs, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                            active_process.append(id_to_run)
+                            preturn = Popen(margs, cwd=pt.spawndir, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                            #print(preturn)
                             #sts = os.waitpid(process.pid, 0)
                         except Exception as e:
                             print(e)
@@ -250,7 +228,7 @@ if(immaster):
                         message_struct["sender"] = MASTER_CHANNEL     
                         message_struct["data"] = f" {id_to_run} spawn done"
                         try:
-                            r.publish(mydata["sender"], dict_to_string(message_struct))
+                            r.publish(mydata["sender"], ut.dict_to_string(message_struct))
                             logger.debug(f"published to {mydata['sender']}")
                         except Exception as e:
                             logger.debug(f"Error publish to {mydata['sender']}")                
@@ -261,43 +239,45 @@ if(immaster):
                     activation_counter+=1
                     completed = False
                     pp.pprint(mydata)
-                    temp = {}
-                    message_struct = {}
-                    process_struct["pid"] = mydata["pid"]
-                    process_struct["cycle"] = mydata["cycle"]
-                    process_struct["timestamp"] = mydata["timestamp"]
-                    temp[mydata["sender"]] = process_struct
+                                
+                    pm.adddetailed(mydata["sender"], mydata["pid"], mydata["cycle"], mydata["timestamp"])  
                     print(f"new one {mydata['sender']}")
                         
                     ##
                     try:
                         message_struct["action"] = "acknowledge"
                         message_struct["sender"] = MASTER_CHANNEL        
-                        r.publish(mydata["sender"], dict_to_string(message_struct))
+                        r.publish(mydata["sender"], ut.dict_to_string(message_struct))
                         #print (f'published to {mydata["sender"]} run {mydata["cycle"] }')
                         logger.debug(f'published to {mydata["sender"]} run {mydata["cycle"] }')
                     except Exception as e:
                         logger.debug(f"Error publish to child {id_to_run}")                
                                 
                     print(f"Exit from {activation_counter} cycle ")
-                    running_process.update(temp)
+                    #running_process.update(temp)
                     completed = True    
                 ## Get list of active process <running_process> list         
                 elif(mydata["action"]=="listactive"):
                     message_struct["action"] = "activeprocesslist"
                     message_struct["sender"] = MASTER_CHANNEL       
-                    message_struct["data"] = running_process
+                    message_struct["data"] = pm.running_process
                     try:
-                        r.publish(mydata["sender"], dict_to_string(message_struct))
+                        r.publish(mydata["sender"], ut.dict_to_string(message_struct))
                         logger.debug(f"published to {mydata['sender']}")
                     except Exception as e:
                         logger.debug(f"Error publish to child {mydata['sender']}")                
 
+                elif(mydata["action"]=="printprocess"):
+                    print(f'Process {pm.numactive}')
+                    print(f'List {pm.running_process}')
+                    pm.printprocess()
+                    
+                    
                 ## Shutdown call from command cli
                 elif(mydata["action"]=="shutdown"):
                     print(f"Process to shutdown { mydata['processtoshutdown']}")
                     if(mydata["processtoshutdown"]=="all"):
-                        shutdown_process(active_process)
+                        shutdown_process(pm.running_process)
                     else:
                         shutdown_process(mydata["processtoshutdown"])
 
@@ -306,7 +286,7 @@ if(immaster):
                     message_struct["sender"] = MASTER_CHANNEL       
                     message_struct["data"] = "shutdown start"
                     try:
-                        r.publish(mydata['sender'], dict_to_string(message_struct))
+                        r.publish(mydata['sender'], ut.dict_to_string(message_struct))
                         logger.debug(f"published to {mydata['sender']}")
                     except Exception as e:
                         logger.debug("Error publish to command cli")                
@@ -315,7 +295,8 @@ if(immaster):
                 elif(mydata["action"]=="executeshutdown"):
                     
                     ## Remove process from list of running process
-                    running_process.pop(mydata["sender"], None)
+                    
+                    pm.remove(mydata["sender"])
                     
                     print(f'{mydata["sender"]} down, last ping {mydata["lastping"]}')
                     
@@ -324,7 +305,7 @@ if(immaster):
                     message_struct["sender"] = MASTER_CHANNEL       
                     message_struct["data"] = f'{mydata["sender"]} shutdown done'
                     try:
-                        r.publish(CMD_CHANNEL, dict_to_string(message_struct))
+                        r.publish(CMD_CHANNEL, ut.dict_to_string(message_struct))
                         logger.debug("published to command line")
                     except Exception as e:
                         logger.debug("Error publish to command line")                
@@ -366,7 +347,7 @@ else:
 
     ##
     try:
-        r.publish(MASTER_CHANNEL, dict_to_string(message_struct))
+        r.publish(MASTER_CHANNEL, ut.dict_to_string(message_struct))
         logger.debug("Published to master")
     except Exception as e:
         logger.debug("Error publish to master ")
@@ -385,7 +366,7 @@ else:
             logger.debug(f'Channel {message["channel"]}')
             logger.debug(f'Type {message["type"]}')
             logger.debug(f'Data {message["data"]} ')
-            mydata = string_to_dict(message["data"])
+            mydata = ut.string_to_dict(message["data"])
             logger.debug('Decoded data {mydata} and type {type(mydata)}')
             logger.debug("======================== client receive END =================\n\n")
             
@@ -401,7 +382,7 @@ else:
                 
                 message_struct["data"] = " is exiting"
                 try:
-                    r.publish(MASTER_CHANNEL, dict_to_string(message_struct))
+                    r.publish(MASTER_CHANNEL, ut.dict_to_string(message_struct))
                     logger.debug("Published to master")
                     sys.exit(0)
                 except Exception as e:
@@ -428,7 +409,7 @@ else:
             message_struct["cycle"] = args.npolls
 
             try:
-                r.publish(MASTER_CHANNEL, dict_to_string(message_struct))
+                r.publish(MASTER_CHANNEL, ut.dict_to_string(message_struct))
                 logger.debug(f"{id} Ping to master {count} {args.npolls}")
                 get_ack = False
             except Exception as e:
