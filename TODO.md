@@ -3,3 +3,4 @@
 - Fix imports
 - Setup some dynamic source/module import system for spawn process
 - Refactoring
+- Insert requirements.txt file
